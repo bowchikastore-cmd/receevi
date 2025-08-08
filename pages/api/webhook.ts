@@ -3,7 +3,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const VERIFY_TOKEN = "bowchika98101";
+  const VERIFY_TOKEN = "human";
 
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];

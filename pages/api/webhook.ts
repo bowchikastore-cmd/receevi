@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
       const text = message.text?.body;
       const timestamp = new Date(+message.timestamp * 1000).toISOString();
 
-      // Step 1: Upsert contact
+      // 1. Upsert contact
       const { data: contactData, error: contactError } = await supabase
         .from('contacts')
         .upsert(
@@ -55,7 +55,12 @@ module.exports = async (req, res) => {
 
       const user_id = contactData?.[0]?.id;
 
-      // Step 2: Insert message
+      if (!user_id) {
+        console.error("❌ No user_id found after upsert");
+        return res.status(500).json({ error: "No contact ID found" });
+      }
+
+      // 2. Insert message
       const { error: msgError } = await supabase.from('messages').insert({
         user_id,
         direction: 'inbound',
@@ -69,6 +74,7 @@ module.exports = async (req, res) => {
         return res.status(500).json({ error: msgError.message });
       }
 
+      console.log("✅ Message saved successfully.");
       return res.status(200).send('OK');
     } catch (err) {
       console.error('❌ Unexpected error:', err);

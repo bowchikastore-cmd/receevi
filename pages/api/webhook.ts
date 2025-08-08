@@ -2,23 +2,25 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const VERIFY_TOKEN = "human";
+const VERIFY_TOKEN = 'human'; // Your new verify token
 
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
-    const challenge = parseInt(req.query['hub.challenge'] as string, 10);
+    const challenge = req.query['hub.challenge'];
 
-    if (mode === 'subscribe' && token === VERIFY_TOKEN && !isNaN(challenge)) {
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/plain');
-      res.end(challenge.toString()); // returns a numeric string, no quotes
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log('WEBHOOK_VERIFIED');
+      res.status(200).send(challenge);
     } else {
-      res.status(403).end('Verification failed');
+      res.status(403).send('Verification failed');
     }
-    return;
+  } else if (req.method === 'POST') {
+    console.log('Webhook received', JSON.stringify(req.body, null, 2));
+    res.status(200).send('EVENT_RECEIVED');
+  } else {
+    res.setHeader('Allow', ['GET', 'POST']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
-
-  res.status(405).end('Method Not Allowed');
 }

@@ -1,14 +1,23 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
+// pages/api/webhook.ts
 
-export default async function handler(
-    req: NextApiRequest,
-    res: NextApiResponse
-) {
-    res.status(200).send("");
-}
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-export const config = {
-    api: {
-        bodyParser: false
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  // This must match your token from Meta
+  const VERIFY_TOKEN = 'bowchika98101';
+
+  if (req.method === 'GET') {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      return res.status(200).send(challenge);
+    } else {
+      return res.status(403).send('Verification failed');
     }
-};
+  }
+
+  // Optional: log webhook messages later here
+  return res.status(200).send('Webhook received');
+}

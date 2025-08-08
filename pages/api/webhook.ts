@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
+// Initialize Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -16,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (mode === 'subscribe' && token === VERIFY_TOKEN) {
       return res.status(200).send(challenge);
     } else {
-      return res.sendStatus(403);
+      return res.status(403).send("Forbidden");
     }
   }
 

@@ -1,19 +1,16 @@
-import { type NextRequest } from 'next/server'
-import { updateSession } from '@/utils/supabase/middleware'
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  return await updateSession(request)
+export function middleware(req: NextRequest) {
+  // Skip rewrite if the request is for /api/webhook
+  if (req.nextUrl.pathname === '/api/webhook') {
+    return NextResponse.next();
+  }
+
+  // Otherwise, allow everything else (or your existing logic)
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|assets/email-templates|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-}
+  matcher: ['/api/webhook'],
+};

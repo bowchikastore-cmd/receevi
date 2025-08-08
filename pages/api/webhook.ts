@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
+// Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -37,35 +37,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const text = message.text?.body || '';
       const timestamp = new Date(Number(message.timestamp) * 1000).toISOString();
 
-      // Step 1: Upsert contact
-      const { data: contactData, error: contactError } = await supabase
+      // Step 1: Check if contact exists
+      const { data: existingContact, error: fetchErr } = await supabase
         .from('contacts')
-        .upsert(
-          {
+        .select('id')
+        .eq('wa_id', wa_id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        console.error("❌ Failed to fetch contact:", fetchErr);
+        return res.status(500).json({ error: fetchErr.message });
+      }
+
+      let user_id = existingContact?.id;
+
+      // Step 2: If not, insert new contact
+      if (!user_id) {
+        const { data: newContact, error: insertErr } = await supabase
+          .from('contacts')
+          .insert({
             wa_id,
             profile_name,
             last_message_at: timestamp,
             last_message_received_at: timestamp,
-            in_chat: true
-          },
-          { onConflict: 'wa_id', returning: 'representation' }
-        )
-        .select();
+            in_chat: true,
+          })
+          .select()
+          .single();
 
-      if (contactError) {
-        console.error('❌ Failed to upsert contact:', contactError);
-        return res.status(500).json({ error: contactError.message });
+        if (insertErr) {
+          console.error("❌ Failed to insert contact:", insertErr);
+          return res.status(500).json({ error: insertErr.message });
+        }
+
+        user_id = newContact.id;
       }
 
-      const user_id = contactData?.[0]?.id;
-
-      if (!user_id) {
-        console.error('❌ No user_id found after contact upsert');
-        return res.status(500).json({ error: 'Contact upsert failed' });
-      }
-
-      // Step 2: Insert message
-      const { error: messageError } = await supabase.from('messages').insert({
+      // Step 3: Insert message
+      const { error: msgError } = await supabase.from('messages').insert({
         user_id,
         direction: 'inbound',
         message: text,
@@ -73,9 +82,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         timestamp,
       });
 
-      if (messageError) {
-        console.error('❌ Failed to insert message:', messageError);
-        return res.status(500).json({ error: messageError.message });
+      if (msgError) {
+        console.error('❌ Failed to insert message:', msgError);
+        return res.status(500).json({ error: msgError.message });
       }
 
       console.log('✅ Message saved:', text);

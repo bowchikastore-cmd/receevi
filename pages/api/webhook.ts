@@ -1,9 +1,6 @@
-// pages/api/webhook.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // This must match your token from Meta
   const VERIFY_TOKEN = 'bowchika98101';
 
   if (req.method === 'GET') {
@@ -12,7 +9,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const challenge = req.query['hub.challenge'];
 
     if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-      return res.status(200).send(challenge);
+      return res.status(200).send(`${challenge}`);
     } else {
       return res.status(403).send('Verification failed');
     }

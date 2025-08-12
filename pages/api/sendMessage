@@ -1,0 +1,70 @@
+// app/api/sendMessage/route.ts
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE!;
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN!;
+const WHATSAPP_API_PHONE_NUMBER_ID = process.env.WHATSAPP_API_PHONE_NUMBER_ID!;
+
+export async function POST(req: Request) {
+  try {
+    const { chatId, text } = await req.json();
+    if (!chatId || !text) {
+      return NextResponse.json({ error: 'chatId and text are required' }, { status: 400 });
+    }
+
+    // 1) Send via WhatsApp Cloud API
+    const waResp = await fetch(
+      `https://graph.facebook.com/v20.0/${WHATSAPP_API_PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: chatId,
+          type: 'text',
+          text: { body: text, preview_url: false },
+        }),
+      }
+    );
+    const waJson = await waResp.json();
+    if (!waResp.ok) {
+      console.error('WA API error:', waJson);
+      return NextResponse.json({ error: 'WhatsApp API failed', details: waJson }, { status: 502 });
+    }
+    const waMessageId: string | undefined = waJson?.messages?.[0]?.id;
+
+    // 2) Save to DB so the UI shows it immediately
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+    const { data: contact } = await supabase
+      .from('contacts')
+      .upsert({ wa_id: chatId, in_chat: true, last_message_at: new Date().toISOString() }, { onConflict: 'wa_id' })
+      .select('id')
+      .single();
+
+    if (contact?.id) {
+      await supabase.from('messages').upsert(
+        {
+          user_id: contact.id,
+          chat_id: chatId,
+          direction: 'outbound',
+          message: text,
+          content: text,   // FE reads this
+          type: 'text',    // FE needs this
+          wa_message_id: waMessageId,
+          timestamp: new Date().toISOString(),
+        },
+        { onConflict: 'wa_message_id' }
+      );
+    }
+
+    return NextResponse.json({ ok: true, waMessageId });
+  } catch (e: any) {
+    console.error('sendMessage error:', e?.message || e);
+    return NextResponse.json({ error: 'server error', details: e?.message || String(e) }, { status: 500 });
+  }
+}

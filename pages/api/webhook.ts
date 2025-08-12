@@ -10,9 +10,10 @@ const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'human';
 if (!SUPABASE_URL) throw new Error('Missing SUPABASE_URL');
 if (!SUPABASE_SERVICE_ROLE) throw new Error('Missing SUPABASE_SERVICE_ROLE');
 
+// Supabase (service role) for server writes
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 
-// (Optional) force Node runtime (not Edge) so process.env works
+// Force Node runtime so process.env works
 export const config = { runtime: 'nodejs' };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -34,13 +35,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const message = entry?.messages?.[0];
       const contact = entry?.contacts?.[0];
 
-      // Ignore status-only payloads
+      // Ignore status-only callbacks
       if (!message || !contact) return res.status(200).send('ok');
 
       const wa_id: string = contact.wa_id;
       const profile_name: string = contact.profile?.name ?? '';
 
-      // text fallbacks (text / quick reply / button)
+      // Text fallbacks (text / interactive quick reply / button text)
       const text: string =
         message?.text?.body ??
         message?.interactive?.button_reply?.title ??
@@ -72,15 +73,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: cErr.message });
       }
 
-      // 2) Upsert message (idempotent via wa_message_id) + FE expects chat_id = wa_id
+      // 2) Upsert message (idempotent via wa_message_id)
+      // FE expects: chat_id (wa_id), content (text), type ('text')
       const { error: mErr } = await supabase
         .from('messages')
         .upsert(
           {
             user_id: c.id,
-            chat_id: wa_id,           // 👈 important for your UI
+            chat_id: wa_id,    // 👈 FE filters by this
             direction: 'inbound',
-            message: text,
+            message: text,     // keep original
+            content: text,     // 👈 FE reads this for display
+            type: 'text',      // 👈 marks message as text
             wa_message_id: message.id,
             timestamp: ts,
           },

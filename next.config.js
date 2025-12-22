@@ -5,10 +5,13 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: [
-        "https://receevi-zwy7.onrender.com"
+        "receevi-zwy7.onrender.com",
+        "*.onrender.com"
       ]
     }
-  }
+  },
+
+  trustHostHeader: true
 }
 
 module.exports = nextConfig

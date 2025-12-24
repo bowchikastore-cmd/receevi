@@ -1,50 +1,75 @@
 import fetch from "node-fetch";
 import { Client, Databases, ID } from "node-appwrite";
 
-export default async ({ req, res, log }) => {
+export default async ({ req, res, log, error }) => {
+  if (req.method !== "POST") {
+    return res.json({ ok: true, message: "Use POST to sync templates" });
+  }
+
   try {
-    // Sirf POST pe sync karega
-    if (req.method !== "POST") {
-      return res.json({ message: "Use POST to sync templates" });
+    // ============================
+    // 1️⃣ ENV VARIABLES
+    // ============================
+    const {
+      WHATSAPP_ACCESS_TOKEN,
+      WHATSAPP_BUSINESS_ACCOUNT_ID,
+      APPWRITE_ENDPOINT,
+      APPWRITE_PROJECT_ID,
+      APPWRITE_API_KEY,
+      APPWRITE_DATABASE_ID,
+      APPWRITE_COLLECTION_ID,
+    } = process.env;
+
+    if (
+      !WHATSAPP_ACCESS_TOKEN ||
+      !WHATSAPP_BUSINESS_ACCOUNT_ID ||
+      !APPWRITE_ENDPOINT ||
+      !APPWRITE_PROJECT_ID ||
+      !APPWRITE_API_KEY ||
+      !APPWRITE_DATABASE_ID ||
+      !APPWRITE_COLLECTION_ID
+    ) {
+      throw new Error("❌ Missing environment variables");
     }
 
-    log("🚀 WhatsApp template sync started");
-
-    // ---------- Appwrite setup ----------
+    // ============================
+    // 2️⃣ INIT APPWRITE
+    // ============================
     const client = new Client()
-      .setEndpoint(process.env.APPWRITE_ENDPOINT)
-      .setProject(process.env.APPWRITE_PROJECT_ID)
-      .setKey(process.env.APPWRITE_API_KEY);
+      .setEndpoint(APPWRITE_ENDPOINT)
+      .setProject(APPWRITE_PROJECT_ID)
+      .setKey(APPWRITE_API_KEY);
 
     const databases = new Databases(client);
 
-    // ---------- WhatsApp API ----------
-    const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    // ============================
+    // 3️⃣ CALL WHATSAPP API
+    // ============================
+    const url = `https://graph.facebook.com/v19.0/${WHATSAPP_BUSINESS_ACCOUNT_ID}/message_templates`;
 
-    const url = `https://graph.facebook.com/v19.0/${wabaId}/message_templates`;
-
-    const response = await fetch(url, {
+    const waRes = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
       },
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text);
+    const waData = await waRes.json();
+
+    if (!waData.data) {
+      throw new Error("❌ WhatsApp API returned no templates");
     }
 
-    const json = await response.json();
-    const templates = json.data || [];
+    log(`📩 Templates fetched: ${waData.data.length}`);
 
-    log(`📦 Templates fetched: ${templates.length}`);
+    // ============================
+    // 4️⃣ SAVE TO APPWRITE
+    // ============================
+    let saved = 0;
 
-    // ---------- Save templates ----------
-    for (const tpl of templates) {
+    for (const tpl of waData.data) {
       await databases.createDocument(
-        process.env.APPWRITE_DATABASE_ID,
-        process.env.APPWRITE_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_COLLECTION_ID,
         ID.unique(),
         {
           template_id: tpl.id,
@@ -54,25 +79,24 @@ export default async ({ req, res, log }) => {
           category: tpl.category,
           previous_category: tpl.previous_category || null,
           components: JSON.stringify(tpl.components),
-          waba_id: wabaId,
+          waba_id: WHATSAPP_BUSINESS_ACCOUNT_ID,
         }
       );
+
+      saved++;
     }
 
+    // ============================
+    // 5️⃣ DONE
+    // ============================
     return res.json({
       success: true,
-      templates_synced: templates.length,
+      fetched: waData.data.length,
+      saved,
     });
-  } catch (err) {
-    log("❌ Sync failed");
-    log(err.message);
 
-    return res.json(
-      {
-        success: false,
-        error: err.message,
-      },
-      500
-    );
+  } catch (err) {
+    error(err.message);
+    return res.json({ success: false, error: err.message }, 500);
   }
 };

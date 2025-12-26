@@ -23,7 +23,7 @@ export default function PanelClient({ children }: { children: ReactNode }) {
         }).catch(console.error);
     }, [router, supabase])
     useEffect(() => {
-        supabase.supabase.auth.getSession().then(res => {
+        supabase.supabase.auth.getUser().then(res => {
             if (res.data.session?.access_token) {
                 supabase.supabase.realtime.setAuth(res.data.session?.access_token)
             }

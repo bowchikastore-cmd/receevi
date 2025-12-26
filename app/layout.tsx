@@ -20,7 +20,7 @@ export default async function RootLayout({
 
   const {
     data: { session },
-  } = await supabase.auth.getSession()
+  } = await supabase.auth.getUser()
   return (
     <html lang="en">
       <head>

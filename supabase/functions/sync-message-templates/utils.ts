@@ -1,14 +1,15 @@
 import { SupabaseClientType } from "../_shared/supabase_types.ts";
 
 // Define the shape of the response from Meta/Facebook
+// We define this interface HERE to avoid importing from "../setup/", which causes the deployment error.
 interface MetaTemplateData {
   id: string;
   name: string;
   category: string;
   status: string;
   language: string;
-  previous_category?: string; // Optional field
-  components: any[];          // JSONB data for headers, footers, etc.
+  previous_category?: string;
+  components: any[];
 }
 
 export async function syncMessageTemplates(supabase: SupabaseClientType) {
@@ -52,22 +53,20 @@ export async function syncMessageTemplates(supabase: SupabaseClientType) {
   console.log(`Fetched ${templates.length} templates. Upserting to database...`);
 
   // 3. Map Data to Your Database Schema
-  // We map the API response to the 'message_template' table columns
   const upsertData = templates.map((t) => ({
     id: t.id,
     name: t.name,
     category: t.category,
-    // Handle simplified language object from Meta (sometimes it's a string, sometimes an object)
     language: typeof t.language === 'object' ? (t.language as any).code : t.language,
     status: t.status,
     previous_category: t.previous_category || null,
     components: t.components,
-    updated_at: new Date().toISOString(), // Update timestamp
+    updated_at: new Date().toISOString(),
   }));
 
   // 4. Upsert into the Correct Table ('message_template')
   const { error } = await supabase
-    .from("message_template") // <--- CRITICAL FIX: Was 'templates'
+    .from("message_template") 
     .upsert(upsertData, { onConflict: "id" });
 
   if (error) {
